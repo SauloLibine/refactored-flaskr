@@ -109,17 +109,40 @@ def update(id):
 
     return render_template("blog/update.html", post=post)
 
-
-@bp.route("/<int:id>/delete", methods=("POST",))
-@login_required
-def delete(id):
-    """Delete a post.
-
-    Ensures that the post exists and that the logged in user is the
-    author of the post.
+# flaskr/blog.py - CÓDIGO REFATORADO: FUNÇÃO AUXILIAR
+def get_post_for_action(post_id, check_author=True):
     """
-    get_post(id)
+    Retorna um objeto de postagem ou interrompe com 404/403.
+    Implementa a lógica de Cláusula de Guarda.
+    """
+    post = get_db().execute(
+        'SELECT p.id, title, body, created, author_id, username'
+        ' FROM post p JOIN user u ON p.author_id = u.id'
+        ' WHERE p.id = ?',
+        (post_id,)
+    ).fetchone()
+
+    # Cláusula de Guarda 1: Verifica se o post existe
+    if post is None:
+        abort(404, f"Post id {post_id} doesn't exist.")
+
+    # Cláusula de Guarda 2: Verifica a permissão do autor (se solicitado)
+    if check_author and post['author_id'] != g.user['id']:
+        abort(403)
+
+    return post
+
+# flaskr/blog.py - CÓDIGO REFATORADO: FUNÇÃO delete
+@bp.route('/<int:post_id>/delete', methods=('POST',)) # Renomeado id para post_id
+@login_required
+def delete(post_id):
+    # 1. Chama a função auxiliar que contém a lógica complexa.
+    # Se a verificação falhar (404/403), a execução para aqui.
+    get_post_for_action(post_id)
+
+    # 2. Se a execução chegou aqui, o usuário tem permissão.
     db = get_db()
-    db.execute("DELETE FROM post WHERE id = ?", (id,))
+    db.execute('DELETE FROM post WHERE id = ?', (post_id,))
     db.commit()
-    return redirect(url_for("blog.index"))
+    
+    return redirect(url_for('blog.index'))
